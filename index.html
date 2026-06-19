@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Ruta · Todo tu auto, en un solo lugar</title>
+<meta name="description" content="La Ruta acompaña a los dueños de autos en Chile: calcula el costo real de tu auto, encuentra talleres de confianza y mantente al día con el mundo automotor.">
+
+<!-- ===== Tipografías de marca ===== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- ===== Mapa (Leaflet + OpenStreetMap, sin API key) ===== -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+/* ============================================================
+   SISTEMA DE DISEÑO — La Ruta
+   Para cambiar la identidad visual, edita solo estas variables.
+   ============================================================ */
+:root{
+  --naranjo: #FF6200;
+  --naranjo-suave: #FFF3EC;
+  --negro: #0A0A0A;
+  --gris-texto: #6E6E73;
+  --gris-fondo: #F5F5F7;
+  --gris-linea: #E5E5E7;
+  --blanco: #FFFFFF;
+  --radio: 24px;
+  --radio-chico: 16px;
+  --ancho-max: 1140px;
+  --paso: clamp(28px, 6vw, 96px); /* ritmo vertical entre secciones */
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  font-family:'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  color:var(--negro);
+  background:var(--blanco);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{ max-width:100%; display:block; }
+a{ color:inherit; text-decoration:none; }
+
+.contenedor{ width:100%; max-width:var(--ancho-max); margin:0 auto; padding:0 24px; }
+
+/* Etiquetas tipo "eyebrow" — Barlow Condensed */
+.eyebrow{
+  font-family:'Barlow Condensed', sans-serif;
+  text-transform:uppercase;
+  letter-spacing:.18em;
+  font-weight:600;
+  font-size:.85rem;
+  color:var(--naranjo);
+  margin-bottom:14px;
+}
+
+/* Títulos grandes — Bebas Neue */
+h1,h2,h3{ font-family:'Bebas Neue', sans-serif; font-weight:400; line-height:.98; letter-spacing:.01em; }
+h2{ font-size:clamp(2.4rem, 6vw, 4.2rem); margin-bottom:18px; }
+h3{ font-size:1.7rem; }
+.sub{ color:var(--gris-texto); font-size:clamp(1rem,2.2vw,1.18rem); max-width:560px; }
+
+/* Botones */
+.btn{
+  display:inline-flex; align-items:center; gap:8px;
+  font-family:'Outfit',sans-serif; font-weight:600; font-size:1rem;
+  padding:14px 28px; border-radius:999px; border:none; cursor:pointer;
+  transition:transform .25s ease, background .25s ease, box-shadow .25s ease;
+}
+.btn-primario{ background:var(--negro); color:var(--blanco); }
+.btn-primario:hover{ transform:translateY(-2px); box-shadow:0 12px 28px rgba(0,0,0,.18); }
+.btn-naranjo{ background:var(--naranjo); color:var(--blanco); }
+.btn-naranjo:hover{ transform:translateY(-2px); box-shadow:0 12px 28px rgba(255,98,0,.32); }
+.btn-fantasma{ background:transparent; color:var(--negro); border:1.5px solid var(--gris-linea); }
+.btn-fantasma:hover{ border-color:var(--negro); }
+
+/* ===== NAV ===== */
+nav{
+  position:fixed; top:0; left:0; right:0; z-index:1000;
+  background:rgba(255,255,255,.72);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid transparent;
+  transition:border-color .3s ease;
+}
+nav.scrolled{ border-bottom:1px solid var(--gris-linea); }
+.nav-inner{ display:flex; align-items:center; justify-content:space-between; height:60px; }
+.logo{ font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:.04em; }
+.logo span{ color:var(--naranjo); }
+.nav-links{ display:flex; gap:30px; align-items:center; }
+.nav-links a{ font-size:.95rem; color:var(--gris-texto); transition:color .2s; font-weight:500; }
+.nav-links a:hover{ color:var(--negro); }
+.nav-toggle{ display:none; background:none; border:none; font-size:1.5rem; cursor:pointer; }
+@media(max-width:820px){
+  .nav-links{
+    position:absolute; top:60px; left:0; right:0; flex-direction:column;
+    background:var(--blanco); padding:20px 24px; gap:18px; align-items:flex-start;
+    border-bottom:1px solid var(--gris-linea);
+    transform:translateY(-130%); transition:transform .35s ease; box-shadow:0 20px 40px rgba(0,0,0,.06);
+  }
+  .nav-links.abierto{ transform:translateY(0); }
+  .nav-toggle{ display:block; }
+}
+
+/* ===== HERO ===== */
+.hero{ position:relative; padding:150px 0 90px; text-align:center; overflow:hidden; }
+.hero h1{ font-size:clamp(3.4rem, 11vw, 8rem); line-height:.9; }
+.hero h1 .acento{ color:var(--naranjo); }
+.hero .sub{ margin:24px auto 0; font-size:clamp(1.05rem,2.6vw,1.4rem); }
+.hero-cta{ margin-top:38px; display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+/* Línea-ruta: el motivo de marca que conecta las secciones */
+.ruta-linea{
+  position:absolute; left:50%; transform:translateX(-50%);
+  width:2px; background:linear-gradient(var(--naranjo), transparent);
+  opacity:.5; z-index:-1;
+}
+.hero-foto{
+  margin:64px auto 0; max-width:920px; border-radius:var(--radio);
+  overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.12);
+  background:linear-gradient(135deg,#2b2b2e,#0a0a0a);
+  aspect-ratio:16/9;
+}
+.hero-foto img{ width:100%; height:100%; object-fit:cover; }
+
+/* ===== SECCIONES ===== */
+section{ padding:var(--paso) 0; }
+.encabezado-seccion{ text-align:center; max-width:640px; margin:0 auto var(--paso); }
+.encabezado-seccion .sub{ margin:0 auto; }
+.gris{ background:var(--gris-fondo); border-radius:40px; margin:0 12px; }
+
+/* ===== CÓMO FUNCIONA (3 pasos) ===== */
+.pasos{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+.paso{
+  background:var(--blanco); border:1px solid var(--gris-linea);
+  border-radius:var(--radio); padding:34px 28px; transition:transform .3s ease, box-shadow .3s ease;
+}
+.paso:hover{ transform:translateY(-6px); box-shadow:0 24px 50px rgba(0,0,0,.07); }
+.paso-num{
+  font-family:'Bebas Neue',sans-serif; font-size:1.4rem; width:46px; height:46px;
+  display:flex; align-items:center; justify-content:center; border-radius:14px;
+  background:var(--naranjo-suave); color:var(--naranjo); margin-bottom:20px;
+}
+.paso h3{ margin-bottom:10px; }
+.paso p{ color:var(--gris-texto); font-size:.98rem; }
+@media(max-width:820px){ .pasos{ grid-template-columns:1fr; } }
+
+/* ===== TCO ===== */
+.tco-grid{ display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:start; }
+.tco-form, .tco-resultado{ border-radius:var(--radio); padding:32px; }
+.tco-form{ background:var(--blanco); border:1px solid var(--gris-linea); }
+.tco-resultado{ background:var(--negro); color:var(--blanco); position:sticky; top:80px; }
+.campo{ margin-bottom:20px; }
+.campo label{ display:block; font-size:.9rem; font-weight:600; margin-bottom:8px; }
+.campo select, .campo input{
+  width:100%; padding:13px 15px; border:1.5px solid var(--gris-linea);
+  border-radius:var(--radio-chico); font-family:'Outfit',sans-serif; font-size:1rem;
+  background:var(--blanco); color:var(--negro); transition:border-color .2s;
+}
+.campo select:focus, .campo input:focus{ outline:none; border-color:var(--naranjo); }
+.campo .pista{ font-size:.8rem; color:var(--gris-texto); margin-top:6px; }
+.tco-resultado .eyebrow{ color:var(--naranjo); }
+.tco-total{ font-family:'Bebas Neue',sans-serif; font-size:clamp(3rem,9vw,5rem); line-height:1; margin:4px 0 2px; }
+.tco-total small{ font-family:'Outfit'; font-size:1rem; color:#9a9a9e; font-weight:400; }
+.tco-permes{ color:#c7c7cc; margin-bottom:24px; }
+.tco-desglose{ border-top:1px solid #2a2a2e; padding-top:18px; }
+.tco-fila{ display:flex; justify-content:space-between; padding:9px 0; font-size:.95rem; color:#d1d1d6; border-bottom:1px solid #1c1c1f; }
+.tco-fila span:last-child{ color:#fff; font-weight:600; }
+.tco-nota{ font-size:.78rem; color:#86868b; margin-top:18px; line-height:1.5; }
+@media(max-width:820px){ .tco-grid{ grid-template-columns:1fr; } .tco-resultado{ position:relative; top:0; } }
+
+/* ===== MAPA ===== */
+.mapa-wrap{ display:grid; grid-template-columns:320px 1fr; gap:0; border-radius:var(--radio); overflow:hidden; border:1px solid var(--gris-linea); box-shadow:0 24px 60px rgba(0,0,0,.06); }
+.mapa-lista{ background:var(--blanco); max-height:560px; overflow-y:auto; }
+.filtros{ display:flex; gap:8px; padding:18px; flex-wrap:wrap; border-bottom:1px solid var(--gris-linea); position:sticky; top:0; background:var(--blanco); z-index:2; }
+.chip{ font-family:'Barlow Condensed',sans-serif; text-transform:uppercase; letter-spacing:.04em; font-weight:600; font-size:.82rem; padding:7px 14px; border-radius:999px; border:1.5px solid var(--gris-linea); background:var(--blanco); cursor:pointer; transition:all .2s; }
+.chip.activo{ background:var(--negro); color:#fff; border-color:var(--negro); }
+.taller{ padding:18px; border-bottom:1px solid var(--gris-linea); cursor:pointer; transition:background .2s; }
+.taller:hover, .taller.activo{ background:var(--naranjo-suave); }
+.taller h4{ font-family:'Outfit'; font-size:1rem; font-weight:600; margin-bottom:3px; }
+.taller .cat{ font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.05em; font-size:.78rem; color:var(--naranjo); font-weight:600; }
+.taller .dir{ font-size:.86rem; color:var(--gris-texto); margin-top:4px; }
+#mapa{ min-height:560px; height:100%; z-index:1; }
+@media(max-width:820px){ .mapa-wrap{ grid-template-columns:1fr; } #mapa{ min-height:380px; order:-1; } .mapa-lista{ max-height:340px; } }
+
+/* ===== BENCINA (ticker) ===== */
+.bencina{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:16px; }
+.precio-card{ background:var(--blanco); border:1px solid var(--gris-linea); border-radius:var(--radio-chico); padding:22px; text-align:center; }
+.precio-card .tipo{ font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.06em; font-weight:600; color:var(--gris-texto); font-size:.85rem; }
+.precio-card .valor{ font-family:'Bebas Neue'; font-size:2.6rem; color:var(--negro); margin-top:6px; }
+.precio-card .valor small{ font-family:'Outfit'; font-size:.85rem; color:var(--gris-texto); }
+
+/* ===== NOTICIAS ===== */
+.noticias{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+.noticia{ background:var(--blanco); border:1px solid var(--gris-linea); border-radius:var(--radio); overflow:hidden; transition:transform .3s ease, box-shadow .3s ease; display:flex; flex-direction:column; }
+.noticia:hover{ transform:translateY(-6px); box-shadow:0 24px 50px rgba(0,0,0,.08); }
+.noticia-img{ aspect-ratio:16/10; background:linear-gradient(135deg,#e8e8eb,#d4d4d8); overflow:hidden; }
+.noticia-img img{ width:100%; height:100%; object-fit:cover; }
+.noticia-cuerpo{ padding:22px; display:flex; flex-direction:column; flex:1; }
+.noticia .fuente{ font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.05em; font-size:.78rem; color:var(--naranjo); font-weight:600; }
+.noticia h4{ font-family:'Outfit'; font-size:1.05rem; font-weight:600; line-height:1.35; margin:8px 0; flex:1; }
+.noticia .fecha{ font-size:.82rem; color:var(--gris-texto); }
+.cargando{ text-align:center; color:var(--gris-texto); padding:40px; grid-column:1/-1; }
+@media(max-width:820px){ .noticias{ grid-template-columns:1fr; } }
+
+/* ===== CTA FINAL ===== */
+.cta-final{ text-align:center; }
+.cta-final .caja{ background:var(--negro); color:#fff; border-radius:40px; padding:clamp(48px,8vw,90px) 24px; }
+.cta-final h2{ color:#fff; }
+.cta-final .sub{ color:#c7c7cc; margin:0 auto 30px; }
+
+/* ===== FOOTER ===== */
+footer{ padding:60px 0 40px; border-top:1px solid var(--gris-linea); margin-top:var(--paso); }
+.footer-inner{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:30px; }
+.footer-inner .logo{ font-size:2rem; }
+.footer-inner p{ color:var(--gris-texto); font-size:.9rem; max-width:280px; margin-top:10px; }
+.footer-links{ display:flex; gap:60px; flex-wrap:wrap; }
+.footer-col h5{ font-family:'Barlow Condensed'; text-transform:uppercase; letter-spacing:.08em; font-size:.85rem; margin-bottom:14px; color:var(--negro); }
+.footer-col a{ display:block; color:var(--gris-texto); font-size:.92rem; padding:5px 0; }
+.footer-col a:hover{ color:var(--naranjo); }
+.copy{ margin-top:40px; color:var(--gris-texto); font-size:.82rem; text-align:center; }
+
+/* ===== ANIMACIÓN DE SCROLL (movimiento por secciones) ===== */
+.reveal{ opacity:0; transform:translateY(36px); transition:opacity .8s cubic-bezier(.2,.7,.3,1), transform .8s cubic-bezier(.2,.7,.3,1); }
+.reveal.visible{ opacity:1; transform:none; }
+@media(prefers-reduced-motion:reduce){
+  .reveal{ opacity:1; transform:none; transition:none; }
+  html{ scroll-behavior:auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====================== NAV ====================== -->
+<nav id="nav">
+  <div class="contenedor nav-inner">
+    <a href="#inicio" class="logo">LA <span>RUTA</span></a>
+    <div class="nav-links" id="navLinks">
+      <a href="#tco">Costo real</a>
+      <a href="#mapa">Talleres</a>
+      <a href="#bencina">Bencina</a>
+      <a href="#noticias">Novedades</a>
+      <a href="#contacto" class="btn btn-naranjo" style="padding:10px 22px;">Súmate</a>
+    </div>
+    <button class="nav-toggle" id="navToggle" aria-label="Menú">☰</button>
+  </div>
+</nav>
+
+<!-- ====================== HERO ====================== -->
+<header class="hero" id="inicio">
+  <div class="ruta-linea" style="top:120px; height:60px;"></div>
+  <div class="contenedor">
+    <h1 class="reveal">Tu auto.<br>Toda <span class="acento">La Ruta</span>.</h1>
+    <p class="sub reveal">Todo lo que un dueño de auto en Chile necesita, en un solo lugar. Calcula cuánto te cuesta de verdad, encuentra talleres de confianza y mantente al día. Gratis.</p>
+    <div class="hero-cta reveal">
+      <a href="#tco" class="btn btn-primario">Calcula tu costo real</a>
+      <a href="#mapa" class="btn btn-fantasma">Buscar talleres</a>
+    </div>
+    <div class="hero-foto reveal">
+      <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1400&q=80"
+           alt="Auto en carretera" onerror="this.style.display='none'">
+    </div>
+  </div>
+</header>
+
+<!-- ====================== CÓMO FUNCIONA ====================== -->
+<section id="como">
+  <div class="contenedor">
+    <div class="encabezado-seccion reveal">
+      <div class="eyebrow">Simple, paso a paso</div>
+      <h2>Tres herramientas. Cero complicaciones.</h2>
+      <p class="sub">No necesitas saber de autos ni de números. La Ruta lo hace por ti.</p>
+    </div>
+    <div class="pasos">
+      <div class="paso reveal">
+        <div class="paso-num">1</div>
+        <h3>Conoce el costo real</h3>
+        <p>Elige tu modelo y descubre cuánto te cuesta tu auto al año: bencina, seguro, permiso, mantención y depreciación. Sin sorpresas.</p>
+      </div>
+      <div class="paso reveal">
+        <div class="paso-num">2</div>
+        <h3>Encuentra dónde repararlo</h3>
+        <p>Talleres y servicios verificados cerca de ti, en un mapa simple. Filtra por lo que necesitas y llega directo.</p>
+      </div>
+      <div class="paso reveal">
+        <div class="paso-num">3</div>
+        <h3>Mantente al día</h3>
+        <p>Precios de bencina y las novedades del mundo automotor chileno, actualizadas en vivo. Todo en un solo lugar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== TCO ====================== -->
+<section id="tco" class="gris">
+  <div class="contenedor">
+    <div class="encabezado-seccion reveal">
+      <div class="eyebrow">Costo Total de Propiedad</div>
+      <h2>¿Cuánto te cuesta de verdad tu auto?</h2>
+      <p class="sub">El precio de compra es solo el comienzo. Calcula el costo real de tenerlo, año a año.</p>
+    </div>
+
+    <div class="tco-grid">
+      <!-- Formulario -->
+      <div class="tco-form reveal">
+        <div class="campo">
+          <label for="modelo">1 · Elige tu auto</label>
+          <select id="modelo"></select>
+        </div>
+        <div class="campo">
+          <label for="km">2 · ¿Cuántos kilómetros manejas al año?</label>
+          <input type="number" id="km" value="15000" min="1000" step="1000">
+          <div class="pista">El promedio en Chile es de 15.000 km al año.</div>
+        </div>
+        <div class="campo">
+          <label for="anios">3 · ¿Por cuántos años?</label>
+          <input type="number" id="anios" value="5" min="1" max="20">
+        </div>
+        <div class="campo">
+          <label for="bencina">4 · Precio de la bencina ($/litro)</label>
+          <input type="number" id="bencina" value="1250" min="500" step="10">
+          <div class="pista">Edítalo según el combustible que usas. Pronto en vivo desde la CNE.</div>
+        </div>
+      </div>
+
+      <!-- Resultado -->
+      <div class="tco-resultado reveal">
+        <div class="eyebrow">Costo total estimado</div>
+        <div class="tco-total" id="rTotal">$0 <small id="rAnios">/ 5 años</small></div>
+        <div class="tco-permes" id="rMes">≈ $0 al mes</div>
+        <div class="tco-desglose">
+          <div class="tco-fila"><span>Depreciación</span><span id="rDep">$0</span></div>
+          <div class="tco-fila"><span>Combustible</span><span id="rComb">$0</span></div>
+          <div class="tco-fila"><span>Seguro</span><span id="rSeg">$0</span></div>
+          <div class="tco-fila"><span>Permiso de circulación</span><span id="rPerm">$0</span></div>
+          <div class="tco-fila"><span>Mantención y neumáticos</span><span id="rMant">$0</span></div>
+          <div class="tco-fila"><span>Revisión técnica</span><span id="rRev">$0</span></div>
+        </div>
+        <p class="tco-nota">Valores referenciales para orientarte, basados en promedios del mercado chileno. No reemplazan una cotización formal.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== MAPA ====================== -->
+<section id="mapa">
+  <div class="contenedor">
+    <div class="encabezado-seccion reveal">
+      <div class="eyebrow">Red de servicios</div>
+      <h2>Talleres de confianza, cerca tuyo</h2>
+      <p class="sub">Servicios verificados en Santiago. Filtra por lo que necesitas y llega directo.</p>
+    </div>
+    <div class="mapa-wrap reveal">
+      <div class="mapa-lista">
+        <div class="filtros" id="filtros"></div>
+        <div id="listaTalleres"></div>
+      </div>
+      <div id="mapa"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== BENCINA ====================== -->
+<section id="bencina" class="gris">
+  <div class="contenedor">
+    <div class="encabezado-seccion reveal">
+      <div class="eyebrow">Combustibles</div>
+      <h2>Precios de bencina hoy</h2>
+      <p class="sub">Valores de referencia para la Región Metropolitana. La conexión en vivo con la CNE llega en la próxima fase.</p>
+    </div>
+    <div class="bencina reveal">
+      <div class="precio-card"><div class="tipo">Bencina 93</div><div class="valor">$1.218<small>/L</small></div></div>
+      <div class="precio-card"><div class="tipo">Bencina 95</div><div class="valor">$1.276<small>/L</small></div></div>
+      <div class="precio-card"><div class="tipo">Bencina 97</div><div class="valor">$1.340<small>/L</small></div></div>
+      <div class="precio-card"><div class="tipo">Diésel</div><div class="valor">$998<small>/L</small></div></div>
+      <div class="precio-card"><div class="tipo">GLP</div><div class="valor">$595<small>/L</small></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== NOTICIAS (EN VIVO) ====================== -->
+<section id="noticias">
+  <div class="contenedor">
+    <div class="encabezado-seccion reveal">
+      <div class="eyebrow">En vivo · Mundo automotor</div>
+      <h2>Lo último del mundo de los autos</h2>
+      <p class="sub">Noticias y novedades del mundo automotor en Chile, actualizadas en tiempo real.</p>
+    </div>
+    <div class="noticias" id="noticias">
+      <div class="cargando">Cargando las últimas novedades…</div>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== CTA FINAL ====================== -->
+<section id="contacto" class="cta-final">
+  <div class="contenedor">
+    <div class="caja reveal">
+      <div class="eyebrow" style="color:var(--naranjo)">Eres taller o servicio automotor</div>
+      <h2>Suma tu negocio a La Ruta</h2>
+      <p class="sub">Conéctate con miles de dueños de autos que buscan servicios de confianza. Gratis para empezar.</p>
+      <a href="mailto:contacto@laruta.cl" class="btn btn-naranjo">Quiero aparecer en el mapa</a>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== FOOTER ====================== -->
+<footer>
+  <div class="contenedor footer-inner">
+    <div>
+      <div class="logo">LA <span style="color:var(--naranjo)">RUTA</span></div>
+      <p>Acompañamos a los dueños de autos en Chile en todo su camino. Hecho en Santiago.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h5>Herramientas</h5>
+        <a href="#tco">Costo real</a>
+        <a href="#mapa">Talleres</a>
+        <a href="#bencina">Bencina</a>
+        <a href="#noticias">Novedades</a>
+      </div>
+      <div class="footer-col">
+        <h5>Empresa</h5>
+        <a href="#como">Cómo funciona</a>
+        <a href="#contacto">Súmate</a>
+        <a href="mailto:contacto@laruta.cl">Contacto</a>
+      </div>
+      <div class="footer-col">
+        <h5>Legal</h5>
+        <a href="#">Privacidad</a>
+        <a href="#">Términos</a>
+      </div>
+    </div>
+  </div>
+  <div class="contenedor"><p class="copy">© 2026 La Ruta CPA SpA · Providencia, Santiago, Chile</p></div>
+</footer>
+
+<!-- ====================== SCRIPTS ====================== -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================
+   1) BASE DE DATOS — AUTOS (para el cálculo de TCO)
+   Edita / agrega modelos aquí. Valores referenciales en CLP.
+   precio: valor nuevo aprox. | consumo: km por litro
+   seguro: prima anual aprox. | mant: mantención + neumáticos al año
+   ============================================================ */
+const AUTOS = [
+  {marca:"Suzuki",     modelo:"Swift",        precio:13990000, consumo:17, seguro:320000, mant:380000},
+  {marca:"Kia",        modelo:"Morning",      precio:11990000, consumo:18, seguro:300000, mant:350000},
+  {marca:"Hyundai",    modelo:"Accent",       precio:15490000, consumo:16, seguro:340000, mant:400000},
+  {marca:"Chevrolet",  modelo:"Sail",         precio:12990000, consumo:16, seguro:310000, mant:370000},
+  {marca:"Toyota",     modelo:"Yaris",        precio:16490000, consumo:18, seguro:330000, mant:360000},
+  {marca:"Toyota",     modelo:"Corolla",      precio:21990000, consumo:15, seguro:400000, mant:450000},
+  {marca:"Toyota",     modelo:"RAV4",         precio:34990000, consumo:12, seguro:560000, mant:620000},
+  {marca:"Hyundai",    modelo:"Tucson",       precio:32990000, consumo:11, seguro:540000, mant:600000},
+  {marca:"Kia",        modelo:"Sportage",     precio:31990000, consumo:11, seguro:530000, mant:590000},
+  {marca:"Nissan",     modelo:"Versa",        precio:15990000, consumo:16, seguro:340000, mant:400000},
+  {marca:"Nissan",     modelo:"Kicks",        precio:21990000, consumo:14, seguro:420000, mant:470000},
+  {marca:"Peugeot",    modelo:"208",          precio:18990000, consumo:15, seguro:380000, mant:520000},
+  {marca:"Mazda",      modelo:"CX-5",         precio:33990000, consumo:11, seguro:560000, mant:600000},
+  {marca:"Mitsubishi", modelo:"L200",         precio:32990000, consumo:10, seguro:520000, mant:640000},
+  {marca:"Ford",       modelo:"Ranger",       precio:38990000, consumo:10, seguro:600000, mant:680000},
+  {marca:"Volkswagen", modelo:"T-Cross",      precio:24990000, consumo:14, seguro:450000, mant:520000},
+  {marca:"Chevrolet",  modelo:"Tracker",      precio:23990000, consumo:14, seguro:440000, mant:500000},
+  {marca:"MG",         modelo:"ZS",           precio:17990000, consumo:14, seguro:380000, mant:460000},
+  {marca:"Renault",    modelo:"Duster",       precio:20990000, consumo:13, seguro:400000, mant:480000},
+  {marca:"Subaru",     modelo:"XV",           precio:29990000, consumo:12, seguro:500000, mant:560000}
+];
+
+/* ============================================================
+   2) BASE DE DATOS — TALLERES (para el mapa)
+   Edita / agrega servicios aquí. lat/lng = coordenadas.
+   cat: categoría (debe coincidir con un filtro de abajo)
+   ============================================================ */
+const TALLERES = [
+  {nombre:"Mecánica Integral Providencia", cat:"Mecánica",     dir:"Av. Providencia 1234, Providencia", lat:-33.4263, lng:-70.6190},
+  {nombre:"Lubricentro Express Las Condes", cat:"Lubricentro", dir:"Av. Apoquindo 4500, Las Condes",     lat:-33.4145, lng:-70.5800},
+  {nombre:"Servicio Eléctrico Ñuñoa",       cat:"Eléctrica",   dir:"Av. Irarrázaval 3400, Ñuñoa",        lat:-33.4560, lng:-70.5980},
+  {nombre:"Vulcanización Santiago Centro",  cat:"Neumáticos",  dir:"Alameda 2100, Santiago",             lat:-33.4490, lng:-70.6650},
+  {nombre:"Taller Multimarca Maipú",        cat:"Mecánica",    dir:"Av. Pajaritos 2800, Maipú",          lat:-33.4870, lng:-70.7560},
+  {nombre:"Frenos y Suspensión La Florida", cat:"Mecánica",    dir:"Av. Vicuña Mackenna 7800, La Florida",lat:-33.5260, lng:-70.5980},
+  {nombre:"Desabolladura y Pintura Macul",  cat:"Carrocería",  dir:"Av. Macul 4200, Macul",              lat:-33.4920, lng:-70.5990},
+  {nombre:"Lubricentro Vitacura",           cat:"Lubricentro", dir:"Av. Vitacura 6500, Vitacura",        lat:-33.3980, lng:-70.5750},
+  {nombre:"Neumáticos Estación Central",    cat:"Neumáticos",  dir:"Av. Ecuador 3900, Estación Central", lat:-33.4570, lng:-70.6900},
+  {nombre:"Electromecánica San Miguel",     cat:"Eléctrica",   dir:"Gran Avenida 4100, San Miguel",      lat:-33.4980, lng:-70.6510}
+];
+
+/* ============================================================
+   LÓGICA TCO
+   ============================================================ */
+const fmt = n => "$" + Math.round(n).toLocaleString("es-CL");
+const $ = id => document.getElementById(id);
+
+function llenarModelos(){
+  const sel = $("modelo");
+  AUTOS.forEach((a,i)=>{
+    const o = document.createElement("option");
+    o.value = i; o.textContent = `${a.marca} ${a.modelo}`;
+    sel.appendChild(o);
+  });
+}
+
+function calcularTCO(){
+  const auto = AUTOS[$("modelo").value];
+  if(!auto) return;
+  const km = +$("km").value || 0;
+  const anios = +$("anios").value || 1;
+  const precioBencina = +$("bencina").value || 0;
+
+  // Depreciación: ~15% el primer año, luego ~10% anual (estimación)
+  let valor = auto.precio, depreciacion = 0;
+  for(let i=0;i<anios;i++){ const tasa = i===0?0.15:0.10; const baja = valor*tasa; depreciacion += baja; valor -= baja; }
+
+  const combustible = (km/auto.consumo)*precioBencina*anios;
+  const seguro = auto.seguro*anios;
+  // Permiso de circulación: aprox. 1,5% de la tasación promedio del periodo
+  const permiso = (auto.precio*0.6)*0.015*anios;
+  const mantencion = auto.mant*anios;
+  const revision = 35000*anios; // revisión técnica anual aprox.
+
+  const total = depreciacion+combustible+seguro+permiso+mantencion+revision;
+
+  $("rTotal").innerHTML = `${fmt(total)} <small>/ ${anios} ${anios==1?"año":"años"}</small>`;
+  $("rMes").textContent = `≈ ${fmt(total/(anios*12))} al mes`;
+  $("rDep").textContent  = fmt(depreciacion);
+  $("rComb").textContent = fmt(combustible);
+  $("rSeg").textContent  = fmt(seguro);
+  $("rPerm").textContent = fmt(permiso);
+  $("rMant").textContent = fmt(mantencion);
+  $("rRev").textContent  = fmt(revision);
+}
+["modelo","km","anios","bencina"].forEach(id=>document.addEventListener("input",e=>{ if(e.target.id===id) calcularTCO(); }));
+
+/* ============================================================
+   LÓGICA MAPA
+   ============================================================ */
+let mapa, marcadores=[], filtroActivo="Todos";
+const CATEGORIAS = ["Todos","Mecánica","Lubricentro","Eléctrica","Neumáticos","Carrocería"];
+
+function iniciarMapa(){
+  mapa = L.map("mapa",{scrollWheelZoom:false}).setView([-33.45,-70.64],11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    attribution:'© OpenStreetMap', maxZoom:18
+  }).addTo(mapa);
+  renderFiltros();
+  renderTalleres();
+}
+
+function renderFiltros(){
+  const cont = $("filtros");
+  CATEGORIAS.forEach(c=>{
+    const b = document.createElement("button");
+    b.className = "chip"+(c===filtroActivo?" activo":"");
+    b.textContent = c;
+    b.onclick = ()=>{ filtroActivo=c; renderFiltros(); renderTalleres(); };
+    cont.appendChild(b);
+  });
+}
+function renderFiltrosUpdate(){ $("filtros").innerHTML=""; renderFiltros(); }
+
+function renderTalleres(){
+  // limpiar
+  $("filtros").innerHTML=""; renderFiltros();
+  marcadores.forEach(m=>mapa.removeLayer(m)); marcadores=[];
+  const lista = $("listaTalleres"); lista.innerHTML="";
+
+  const filtrados = TALLERES.filter(t=>filtroActivo==="Todos"||t.cat===filtroActivo);
+  filtrados.forEach((t,i)=>{
+    const el = document.createElement("div");
+    el.className="taller";
+    el.innerHTML = `<div class="cat">${t.cat}</div><h4>${t.nombre}</h4><div class="dir">${t.dir}</div>`;
+    const marcador = L.marker([t.lat,t.lng]).addTo(mapa).bindPopup(`<strong>${t.nombre}</strong><br>${t.dir}`);
+    marcadores.push(marcador);
+    el.onclick = ()=>{ mapa.setView([t.lat,t.lng],14); marcador.openPopup();
+      document.querySelectorAll(".taller").forEach(x=>x.classList.remove("activo")); el.classList.add("activo"); };
+    lista.appendChild(el);
+  });
+  if(!filtrados.length) lista.innerHTML='<div class="cargando">No hay servicios en esta categoría todavía.</div>';
+}
+
+/* ============================================================
+   LÓGICA NOTICIAS EN VIVO (Google News RSS vía rss2json)
+   ============================================================ */
+async function cargarNoticias(){
+  const cont = $("noticias");
+  const feed = "https://news.google.com/rss/search?q=autos+OR+veh%C3%ADculos+chile&hl=es-419&gl=CL&ceid=CL:es-419";
+  const url = "https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(feed) + "&count=6";
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.status!=="ok" || !data.items?.length) throw new Error("sin items");
+    cont.innerHTML="";
+    data.items.slice(0,6).forEach(item=>{
+      const fuente = (item.title.split(" - ").pop()||"Automotor").trim();
+      const titulo = item.title.replace(/ - [^-]*$/,"");
+      const fecha = new Date(item.pubDate).toLocaleDateString("es-CL",{day:"numeric",month:"long"});
+      const img = item.thumbnail || item.enclosure?.link || "";
+      const card = document.createElement("a");
+      card.className="noticia"; card.href=item.link; card.target="_blank"; card.rel="noopener";
+      card.innerHTML = `
+        <div class="noticia-img">${img?`<img src="${img}" onerror="this.parentNode.style.background='linear-gradient(135deg,#FF6200,#0a0a0a)';this.remove()">`:""}</div>
+        <div class="noticia-cuerpo">
+          <div class="fuente">${fuente}</div>
+          <h4>${titulo}</h4>
+          <div class="fecha">${fecha}</div>
+        </div>`;
+      cont.appendChild(card);
+    });
+  }catch(e){
+    cont.innerHTML='<div class="cargando">No pudimos cargar las novedades en este momento. Inténtalo de nuevo más tarde.</div>';
+  }
+}
+
+/* ============================================================
+   ANIMACIÓN DE SCROLL + NAV
+   ============================================================ */
+function iniciarReveal(){
+  const obs = new IntersectionObserver((entradas)=>{
+    entradas.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add("visible"); obs.unobserve(en.target); } });
+  },{threshold:0.12});
+  document.querySelectorAll(".reveal").forEach(el=>obs.observe(el));
+}
+
+window.addEventListener("scroll",()=>{
+  $("nav").classList.toggle("scrolled", window.scrollY>10);
+});
+$("navToggle").onclick = ()=> $("navLinks").classList.toggle("abierto");
+document.querySelectorAll(".nav-links a").forEach(a=>a.onclick=()=>$("navLinks").classList.remove("abierto"));
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+window.addEventListener("DOMContentLoaded",()=>{
+  llenarModelos();
+  calcularTCO();
+  iniciarMapa();
+  cargarNoticias();
+  iniciarReveal();
+});
+</script>
+</body>
+</html>
